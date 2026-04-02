@@ -50,6 +50,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .view-controls { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; z-index: 10; }
 .view-controls label { font-size: 12px; background: rgba(22,33,62,0.85); padding: 4px 10px; border-radius: 4px; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 4px; }
 .view-controls input[type="checkbox"] { accent-color: #e94560; }
+.view-controls .range-label { gap: 6px; }
+.view-controls input[type="range"] { width: 80px; accent-color: #e94560; vertical-align: middle; }
+.view-controls #camDistVal { font-size: 11px; min-width: 20px; display: inline-block; }
 
 /* Right panel - bone tree */
 .panel-right { width: 280px; background: #16213e; border-left: 1px solid #0f3460; display: flex; flex-direction: column; flex-shrink: 0; }
@@ -93,6 +96,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
       <label><input type="checkbox" id="showMesh" checked> Mesh</label>
       <label><input type="checkbox" id="showSkeleton" checked> Skeleton</label>
       <label><input type="checkbox" id="showWireframe"> Wireframe</label>
+      <label class="range-label">Dist <input type="range" id="camDist" min="1" max="20" step="0.5" value="6"> <span id="camDistVal">6</span></label>
     </div>
   </div>
   <div class="panel-right">
@@ -130,6 +134,8 @@ const dirTags = document.getElementById('dirTags');
 const showMeshCb = document.getElementById('showMesh');
 const showSkeletonCb = document.getElementById('showSkeleton');
 const showWireframeCb = document.getElementById('showWireframe');
+const camDistSlider = document.getElementById('camDist');
+const camDistVal = document.getElementById('camDistVal');
 
 // Three.js setup
 const scene = new THREE.Scene();
@@ -376,8 +382,9 @@ function addModel(object) {
   scene.add(boneMarker);
 
   // Reset camera
+  const dist = parseFloat(camDistSlider.value);
   controls.target.set(0, size.y * scale * 0.4, 0);
-  camera.position.set(1.5, 1.2, 2.5);
+  camera.position.set(dist * 0.5, dist * 0.4, dist * 0.85);
   controls.update();
 
   viewControls.style.display = 'flex';
@@ -395,6 +402,14 @@ function applyVisibility() {
 showMeshCb.addEventListener('change', applyVisibility);
 showSkeletonCb.addEventListener('change', applyVisibility);
 showWireframeCb.addEventListener('change', applyVisibility);
+
+camDistSlider.addEventListener('input', () => {
+  const dist = parseFloat(camDistSlider.value);
+  camDistVal.textContent = dist;
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  camera.position.copy(controls.target).addScaledVector(dir, dist);
+  controls.update();
+});
 
 // Build bone tree UI
 function buildBoneTree(root) {
