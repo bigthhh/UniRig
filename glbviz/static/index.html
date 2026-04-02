@@ -349,10 +349,16 @@ function addModel(object) {
     if (child.isBone) bones.push(child);
   });
 
-  // Skeleton helper
+  // Skeleton helper with per-segment vertex colors
   if (bones.length > 0) {
     skeletonHelper = new THREE.SkeletonHelper(object);
-    skeletonHelper.material.linewidth = 2;
+    skeletonHelper.material = new THREE.LineBasicMaterial({
+      vertexColors: true, linewidth: 2, depthTest: false, depthWrite: false,
+    });
+    const count = skeletonHelper.geometry.getAttribute('position').count;
+    const colors = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) { colors[i*3] = 0.3; colors[i*3+1] = 0.5; colors[i*3+2] = 0.8; }
+    skeletonHelper.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     scene.add(skeletonHelper);
     buildBoneTree(object);
     boneCount.textContent = `${bones.length} bones`;
@@ -362,9 +368,10 @@ function addModel(object) {
 
   // Bone marker sphere
   boneMarker = new THREE.Mesh(
-    new THREE.SphereGeometry(0.015, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0xe94560 })
+    new THREE.SphereGeometry(0.025, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0xe94560, depthTest: false, transparent: true, opacity: 0.9 })
   );
+  boneMarker.renderOrder = 999;
   boneMarker.visible = false;
   scene.add(boneMarker);
 
@@ -446,12 +453,41 @@ function renderBoneNode(bone, depth, container) {
 }
 
 function highlightBone(bone) {
-  if (!boneMarker) return;
-  const pos = new THREE.Vector3();
-  bone.getWorldPosition(pos);
-  boneMarker.position.copy(pos);
-  boneMarker.visible = true;
   selectedBoneObj = bone;
+
+  // Marker sphere
+  if (boneMarker) {
+    const pos = new THREE.Vector3();
+    bone.getWorldPosition(pos);
+    boneMarker.position.copy(pos);
+    boneMarker.visible = true;
+  }
+
+  // Color skeleton segments: highlight selected bone's connections
+  if (!skeletonHelper) return;
+  const geo = skeletonHelper.geometry;
+  const colorAttr = geo.getAttribute('color');
+  const bones = skeletonHelper.bones;
+  const DIM = [0.2, 0.25, 0.35];
+  const BRIGHT = [1.0, 0.85, 0.0];
+  const NORMAL = [0.3, 0.5, 0.8];
+
+  // SkeletonHelper stores line pairs: for each bone (except root), a segment from bone to parent
+  // bones array order matches geometry pairs: segment i uses vertices 2*i and 2*i+1
+  for (let i = 0; i < bones.length; i++) {
+    const b = bones[i];
+    const isSelected = (b === bone);
+    const isParentOfSelected = (b.parent === bone && b.parent?.isBone);
+    const isChildOfSelected = (bone.parent === b && bone.parent?.isBone);
+    const connected = isSelected || isParentOfSelected || isChildOfSelected;
+    const c = connected ? BRIGHT : DIM;
+    const vi = i * 2;
+    if (vi + 1 < colorAttr.count) {
+      colorAttr.setXYZ(vi, c[0], c[1], c[2]);
+      colorAttr.setXYZ(vi + 1, c[0], c[1], c[2]);
+    }
+  }
+  colorAttr.needsUpdate = true;
 }
 
 // Initial load
