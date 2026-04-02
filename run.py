@@ -3,6 +3,7 @@ import yaml
 from box import Box
 import os
 import torch
+torch.serialization.add_safe_globals([Box])
 import lightning as L
 from lightning.pytorch.callbacks import ModelCheckpoint, Callback
 from lightning.pytorch.loggers import WandbLogger
