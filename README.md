@@ -79,7 +79,7 @@ We appreciate your patience as we prepare these components for release. Follow [
     python -m pip install spconv-{you-cuda-version}
     python -m pip install torch_scatter torch_cluster -f https://data.pyg.org/whl/torch-{your-torch-version}+{your-cuda-version}.html --no-cache-dir
     python -m pip install numpy==1.26.4
-    python -m pip install flash-attn-4
+    python -m pip install flash-attn-4==4.0.0b7
     ```
   
   `spconv` is installed from [this repo](https://github.com/traveller59/spconv), `torch_scatter` and `torch_cluster` are installed from [this site](https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html). Also, there is a high chance that you will encounter flash-attn installation errors; go to the [flash-attn-4 repo](https://github.com/togethercomputer/flash-attention-4) and follow its installation guide.
