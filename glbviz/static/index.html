@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GLB/FBX Viewer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #1a1a2e; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* Top bar */
+.topbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #16213e; border-bottom: 1px solid #0f3460; flex-shrink: 0; flex-wrap: wrap; }
+.topbar .dir-input-row { display: flex; gap: 6px; width: 100%; }
+.topbar input[type="text"] { flex: 1; padding: 6px 10px; background: #1a1a2e; border: 1px solid #0f3460; border-radius: 4px; color: #e0e0e0; font-size: 13px; min-width: 0; }
+.topbar input[type="text"]:focus { outline: none; border-color: #e94560; }
+.topbar button { padding: 5px 14px; border: none; border-radius: 4px; color: #fff; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.topbar .btn-add { background: #e94560; }
+.topbar .btn-add:hover { background: #c73850; }
+.topbar .btn-reload { background: #0f3460; }
+.topbar .btn-reload:hover { background: #1a4a8a; }
+.dir-tags { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; min-height: 0; }
+.dir-tag { display: flex; align-items: center; gap: 4px; background: #1a1a2e; border: 1px solid #0f3460; border-radius: 4px; padding: 3px 8px; font-size: 12px; max-width: 400px; }
+.dir-tag .dir-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #aaa; }
+.dir-tag .dir-remove { cursor: pointer; color: #e94560; font-weight: bold; font-size: 14px; line-height: 1; padding: 0 2px; }
+.dir-tag .dir-remove:hover { color: #ff6b81; }
+
+/* Main layout */
+.main { display: flex; flex: 1; overflow: hidden; }
+
+/* Left panel - file list */
+.panel-left { width: 240px; background: #16213e; border-right: 1px solid #0f3460; display: flex; flex-direction: column; flex-shrink: 0; }
+.panel-left h3 { padding: 10px 12px 6px; font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+.file-list { flex: 1; overflow-y: auto; }
+.file-item { padding: 8px 12px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #0f3460; display: flex; align-items: center; gap: 8px; }
+.file-item:hover { background: #1a1a3e; }
+.file-item.active { background: #0f3460; border-left: 3px solid #e94560; }
+.file-item .ext { font-size: 10px; padding: 1px 5px; border-radius: 3px; font-weight: 600; text-transform: uppercase; }
+.file-item .ext.glb { background: #2d6a4f; color: #b7e4c7; }
+.file-item .ext.fbx { background: #7b2cbf; color: #e0aaff; }
+.file-item .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.file-item .size { font-size: 11px; color: #666; }
+.dir-group { padding: 6px 12px 4px; font-size: 11px; color: #e94560; background: #111a30; border-bottom: 1px solid #0f3460; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: sticky; top: 0; z-index: 1; }
+
+/* Center - 3D viewport */
+.viewport { flex: 1; position: relative; background: #111; }
+.viewport canvas { display: block; }
+.viewport .hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #444; font-size: 16px; }
+
+/* Viewport controls */
+.view-controls { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; z-index: 10; }
+.view-controls label { font-size: 12px; background: rgba(22,33,62,0.85); padding: 4px 10px; border-radius: 4px; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 4px; }
+.view-controls input[type="checkbox"] { accent-color: #e94560; }
+
+/* Right panel - bone tree */
+.panel-right { width: 280px; background: #16213e; border-left: 1px solid #0f3460; display: flex; flex-direction: column; flex-shrink: 0; }
+.panel-right h3 { padding: 10px 12px 6px; font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+.bone-tree { flex: 1; overflow-y: auto; padding: 4px 0; font-size: 12px; font-family: "SF Mono", "Fira Code", monospace; }
+.bone-node { padding: 2px 0 2px calc(12px + var(--depth, 0) * 16px); cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
+.bone-node:hover { background: #1a1a3e; }
+.bone-node.selected { background: #0f3460; color: #e94560; }
+.bone-node .toggle { width: 14px; text-align: center; font-size: 10px; color: #666; flex-shrink: 0; }
+.bone-node .bone-name { overflow: hidden; text-overflow: ellipsis; }
+.bone-count { padding: 4px 12px 8px; font-size: 11px; color: #666; }
+
+/* Loading overlay */
+.loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #e94560; font-size: 14px; display: none; }
+.loading.show { display: block; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="dir-input-row">
+    <input type="text" id="dirInput" placeholder="Add directory path (e.g. /path/to/models)" />
+    <button class="btn-add" id="addBtn">+ Add</button>
+    <button class="btn-reload" id="reloadBtn">Reload</button>
+  </div>
+  <div class="dir-tags" id="dirTags"></div>
+</div>
+<div class="main">
+  <div class="panel-left">
+    <h3>Files</h3>
+    <div class="file-list" id="fileList"></div>
+  </div>
+  <div class="viewport" id="viewport">
+    <div class="hint" id="hint">Select a file to preview</div>
+    <div class="loading" id="loading">Loading model...</div>
+    <div class="view-controls" id="viewControls" style="display:none;">
+      <label><input type="checkbox" id="showMesh" checked> Mesh</label>
+      <label><input type="checkbox" id="showSkeleton" checked> Skeleton</label>
+      <label><input type="checkbox" id="showWireframe"> Wireframe</label>
+    </div>
+  </div>
+  <div class="panel-right">
+    <h3>Skeleton</h3>
+    <div class="bone-count" id="boneCount"></div>
+    <div class="bone-tree" id="boneTree"></div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+const viewport = document.getElementById('viewport');
+const fileList = document.getElementById('fileList');
+const boneTree = document.getElementById('boneTree');
+const boneCount = document.getElementById('boneCount');
+const loading = document.getElementById('loading');
+const hint = document.getElementById('hint');
+const viewControls = document.getElementById('viewControls');
+const dirInput = document.getElementById('dirInput');
+const addBtn = document.getElementById('addBtn');
+const reloadBtn = document.getElementById('reloadBtn');
+const dirTags = document.getElementById('dirTags');
+const showMeshCb = document.getElementById('showMesh');
+const showSkeletonCb = document.getElementById('showSkeleton');
+const showWireframeCb = document.getElementById('showWireframe');
+
+// Three.js setup
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111111);
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 1000);
+camera.position.set(2, 2, 3);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+viewport.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+dirLight.position.set(5, 10, 7);
+scene.add(dirLight);
+const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+dirLight2.position.set(-5, -2, -5);
+scene.add(dirLight2);
+
+// Grid
+const grid = new THREE.GridHelper(10, 20, 0x333333, 0x222222);
+scene.add(grid);
+
+// State
+let currentModel = null;
+let skeletonHelper = null;
+let meshes = [];
+let files = [];
+let selectedBoneObj = null;
+let boneMarker = null;
+
+function resize() {
+  const w = viewport.clientWidth;
+  const h = viewport.clientHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+window.addEventListener('resize', resize);
+resize();
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+// Directory management
+let savedDirs = [];
+
+async function fetchDirs() {
+  const res = await fetch('/api/dirs');
+  savedDirs = await res.json();
+  renderDirTags();
+}
+
+async function addDir() {
+  const dir = dirInput.value.trim();
+  if (!dir) return;
+  try {
+    const res = await fetch('/api/dirs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dir })
+    });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    savedDirs = data;
+    dirInput.value = '';
+    renderDirTags();
+    await reload();
+  } catch (e) { alert('Add failed: ' + e.message); }
+}
+
+async function removeDir(dir) {
+  const res = await fetch('/api/dirs', {
+    method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dir })
+  });
+  savedDirs = await res.json();
+  renderDirTags();
+  await reload();
+}
+
+function renderDirTags() {
+  dirTags.innerHTML = '';
+  savedDirs.forEach(d => {
+    const tag = document.createElement('div');
+    tag.className = 'dir-tag';
+    const pathSpan = document.createElement('span');
+    pathSpan.className = 'dir-path';
+    pathSpan.textContent = d;
+    pathSpan.title = d;
+    const removeSpan = document.createElement('span');
+    removeSpan.className = 'dir-remove';
+    removeSpan.textContent = '\u00D7';
+    removeSpan.addEventListener('click', () => removeDir(d));
+    tag.appendChild(pathSpan);
+    tag.appendChild(removeSpan);
+    dirTags.appendChild(tag);
+  });
+}
+
+async function reload() {
+  try {
+    const res = await fetch('/api/scan');
+    const data = await res.json();
+    files = data.files || [];
+    renderFileList();
+  } catch (e) { alert('Reload failed: ' + e.message); }
+}
+
+addBtn.addEventListener('click', addDir);
+dirInput.addEventListener('keydown', e => { if (e.key === 'Enter') addDir(); });
+reloadBtn.addEventListener('click', reload);
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function renderFileList() {
+  fileList.innerHTML = '';
+  let lastDir = null;
+  files.forEach((f, i) => {
+    if (f.dir !== lastDir) {
+      lastDir = f.dir;
+      const header = document.createElement('div');
+      header.className = 'dir-group';
+      header.textContent = f.dir;
+      header.title = f.dir;
+      fileList.appendChild(header);
+    }
+    const div = document.createElement('div');
+    div.className = 'file-item';
+    div.dataset.index = i;
+    div.innerHTML = `<span class="ext ${f.ext}">${f.ext}</span><span class="name" title="${f.name}">${f.name}</span><span class="size">${formatSize(f.size)}</span>`;
+    div.addEventListener('click', () => loadFile(i));
+    fileList.appendChild(div);
+  });
+}
+
+// Load model
+async function loadFile(index) {
+  const f = files[index];
+  document.querySelectorAll('.file-item').forEach(el => el.classList.remove('active'));
+  document.querySelector(`.file-item[data-index="${index}"]`)?.classList.add('active');
+
+  clearScene();
+  loading.classList.add('show');
+  hint.style.display = 'none';
+  viewControls.style.display = 'none';
+
+  const url = `/api/file?path=${encodeURIComponent(f.path)}`;
+
+  try {
+    if (f.ext === 'glb') {
+      const loader = new GLTFLoader();
+      const gltf = await loader.loadAsync(url);
+      addModel(gltf.scene);
+    } else if (f.ext === 'fbx') {
+      const loader = new FBXLoader();
+      const fbx = await loader.loadAsync(url);
+      addModel(fbx);
+    }
+  } catch (e) {
+    alert('Failed to load: ' + e.message);
+    console.error(e);
+  } finally {
+    loading.classList.remove('show');
+  }
+}
+
+function clearScene() {
+  if (currentModel) { scene.remove(currentModel); currentModel = null; }
+  if (skeletonHelper) { scene.remove(skeletonHelper); skeletonHelper = null; }
+  if (boneMarker) { scene.remove(boneMarker); boneMarker = null; }
+  meshes = [];
+  boneTree.innerHTML = '';
+  boneCount.textContent = '';
+  selectedBoneObj = null;
+}
+
+function addModel(object) {
+  currentModel = object;
+
+  // Auto-scale to fit
+  const box = new THREE.Box3().setFromObject(object);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const scale = maxDim > 0 ? 2.0 / maxDim : 1;
+  object.scale.multiplyScalar(scale);
+  box.setFromObject(object);
+  box.getCenter(center);
+  object.position.sub(center);
+  object.position.y -= box.min.y * scale / maxDim; // ground it
+
+  scene.add(object);
+
+  // Collect meshes and skeletons
+  const bones = [];
+  object.traverse(child => {
+    if (child.isMesh) {
+      meshes.push(child);
+      child.material = child.material.clone?.() ?? child.material;
+    }
+    if (child.isBone) bones.push(child);
+  });
+
+  // Skeleton helper
+  if (bones.length > 0) {
+    skeletonHelper = new THREE.SkeletonHelper(object);
+    skeletonHelper.material.linewidth = 2;
+    scene.add(skeletonHelper);
+    buildBoneTree(object);
+    boneCount.textContent = `${bones.length} bones`;
+  } else {
+    boneCount.textContent = 'No skeleton found';
+  }
+
+  // Bone marker sphere
+  boneMarker = new THREE.Mesh(
+    new THREE.SphereGeometry(0.015, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0xe94560 })
+  );
+  boneMarker.visible = false;
+  scene.add(boneMarker);
+
+  // Reset camera
+  controls.target.set(0, size.y * scale * 0.4, 0);
+  camera.position.set(1.5, 1.2, 2.5);
+  controls.update();
+
+  viewControls.style.display = 'flex';
+  applyVisibility();
+}
+
+// Visibility toggles
+function applyVisibility() {
+  meshes.forEach(m => {
+    m.visible = showMeshCb.checked;
+    if (m.material) m.material.wireframe = showWireframeCb.checked;
+  });
+  if (skeletonHelper) skeletonHelper.visible = showSkeletonCb.checked;
+}
+showMeshCb.addEventListener('change', applyVisibility);
+showSkeletonCb.addEventListener('change', applyVisibility);
+showWireframeCb.addEventListener('change', applyVisibility);
+
+// Build bone tree UI
+function buildBoneTree(root) {
+  boneTree.innerHTML = '';
+  const rootBones = [];
+  root.traverse(child => {
+    if (child.isBone && !(child.parent && child.parent.isBone)) {
+      rootBones.push(child);
+    }
+  });
+  rootBones.forEach(bone => renderBoneNode(bone, 0, boneTree));
+}
+
+function renderBoneNode(bone, depth, container) {
+  const hasChildren = bone.children.some(c => c.isBone);
+  const div = document.createElement('div');
+  div.className = 'bone-node';
+  div.style.setProperty('--depth', depth);
+
+  const toggle = document.createElement('span');
+  toggle.className = 'toggle';
+  toggle.textContent = hasChildren ? '\u25BC' : '\u00B7';
+
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'bone-name';
+  nameSpan.textContent = bone.name || '(unnamed)';
+
+  div.appendChild(toggle);
+  div.appendChild(nameSpan);
+
+  const childContainer = document.createElement('div');
+  childContainer.style.display = 'block';
+
+  div.addEventListener('click', (e) => {
+    e.stopPropagation();
+    // Highlight bone
+    document.querySelectorAll('.bone-node.selected').forEach(el => el.classList.remove('selected'));
+    div.classList.add('selected');
+    highlightBone(bone);
+    // Toggle children
+    if (hasChildren && e.target === toggle) {
+      const visible = childContainer.style.display !== 'none';
+      childContainer.style.display = visible ? 'none' : 'block';
+      toggle.textContent = visible ? '\u25B6' : '\u25BC';
+    }
+  });
+
+  container.appendChild(div);
+
+  if (hasChildren) {
+    container.appendChild(childContainer);
+    bone.children.filter(c => c.isBone).forEach(child => {
+      renderBoneNode(child, depth + 1, childContainer);
+    });
+  }
+}
+
+function highlightBone(bone) {
+  if (!boneMarker) return;
+  const pos = new THREE.Vector3();
+  bone.getWorldPosition(pos);
+  boneMarker.position.copy(pos);
+  boneMarker.visible = true;
+  selectedBoneObj = bone;
+}
+
+// Initial load
+fetchDirs().then(reload);
+
+// Update bone marker position each frame
+const clock = new THREE.Clock();
+(function updateMarker() {
+  requestAnimationFrame(updateMarker);
+  if (selectedBoneObj && boneMarker && boneMarker.visible) {
+    const pos = new THREE.Vector3();
+    selectedBoneObj.getWorldPosition(pos);
+    boneMarker.position.copy(pos);
+  }
+})();
+</script>
+</body>
+</html>
