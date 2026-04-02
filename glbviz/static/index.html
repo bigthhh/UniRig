@@ -428,13 +428,20 @@ function renderBoneNode(bone, depth, container) {
   const childContainer = document.createElement('div');
   childContainer.style.display = 'block';
 
-  div.addEventListener('click', (e) => {
-    e.stopPropagation();
-    // Highlight bone
+  div.addEventListener('mouseenter', () => {
     document.querySelectorAll('.bone-node.selected').forEach(el => el.classList.remove('selected'));
     div.classList.add('selected');
     highlightBone(bone);
-    // Toggle children
+  });
+
+  div.addEventListener('mouseleave', () => {
+    div.classList.remove('selected');
+    resetBoneColors();
+    if (boneMarker) boneMarker.visible = false;
+  });
+
+  div.addEventListener('click', (e) => {
+    e.stopPropagation();
     if (hasChildren && e.target === toggle) {
       const visible = childContainer.style.display !== 'none';
       childContainer.style.display = visible ? 'none' : 'block';
@@ -486,6 +493,17 @@ function highlightBone(bone) {
       colorAttr.setXYZ(vi, c[0], c[1], c[2]);
       colorAttr.setXYZ(vi + 1, c[0], c[1], c[2]);
     }
+  }
+  colorAttr.needsUpdate = true;
+}
+
+function resetBoneColors() {
+  selectedBoneObj = null;
+  if (!skeletonHelper) return;
+  const colorAttr = skeletonHelper.geometry.getAttribute('color');
+  if (!colorAttr) return;
+  for (let i = 0; i < colorAttr.count; i++) {
+    colorAttr.setXYZ(i, 0.3, 0.5, 0.8);
   }
   colorAttr.needsUpdate = true;
 }
