@@ -1,4 +1,5 @@
 transformers==4.51.3
+flash-attn-4
 python-box
 einops
 omegaconf
@@ -8,7 +9,6 @@ addict
 timm
 fast-simplification
 bpy==4.2
-flash_attn
 trimesh
 open3d
 pyrender

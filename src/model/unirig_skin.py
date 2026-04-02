@@ -7,7 +7,10 @@ from typing import Dict, List
 from transformers import AutoModelForCausalLM, AutoConfig
 import math
 import torch_scatter
-from flash_attn.modules.mha import MHA
+try:
+    from flash_attn.modules.mha import MHA as FlashMHA
+except ImportError:
+    FlashMHA = None
 
 from .spec import ModelSpec, ModelInput
 from .parse_encoder import MAP_MESH_ENCODER, get_mesh_encoder
@@ -114,8 +117,15 @@ class ResidualCrossAttn(nn.Module):
 
         self.norm1 = nn.LayerNorm(feat_dim)
         self.norm2 = nn.LayerNorm(feat_dim)
-        # self.attention = nn.MultiheadAttention(embed_dim=feat_dim, num_heads=num_heads, batch_first=True)
-        self.attention = MHA(embed_dim=feat_dim, num_heads=num_heads, cross_attn=True)
+        self.use_flash_mha = FlashMHA is not None
+        if self.use_flash_mha:
+            self.attention = FlashMHA(embed_dim=feat_dim, num_heads=num_heads, cross_attn=True)
+        else:
+            self.attention = nn.MultiheadAttention(
+                embed_dim=feat_dim,
+                num_heads=num_heads,
+                batch_first=True,
+            )
         self.ffn = nn.Sequential(
             nn.Linear(feat_dim, feat_dim * 4),
             nn.GELU(),
@@ -124,7 +134,10 @@ class ResidualCrossAttn(nn.Module):
         
     def forward(self, q, kv):
         residual = q
-        attn_output = self.attention(q, x_kv=kv)
+        if self.use_flash_mha:
+            attn_output = self.attention(q, x_kv=kv)
+        else:
+            attn_output, _ = self.attention(q, kv, kv, need_weights=False)
         x = self.norm1(residual + attn_output)
         x = self.norm2(x + self.ffn(x))
         return x

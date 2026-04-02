@@ -14,6 +14,12 @@ try:
 except ImportError:
     flash_attn = None
 
+flash_attn_varlen_qkvpacked_func = None
+if flash_attn is not None:
+    flash_attn_varlen_qkvpacked_func = getattr(
+        flash_attn, "flash_attn_varlen_qkvpacked_func", None
+    )
+
 from .utils.misc import offset2bincount
 from .utils.structure import Point
 from .modules import PointModule, PointSequential
@@ -86,13 +92,17 @@ class SerializedAttention(PointModule):
         self.upcast_attention = upcast_attention
         self.upcast_softmax = upcast_softmax
         self.enable_rpe = enable_rpe
-        self.enable_flash = enable_flash
+        self.enable_flash = enable_flash and flash_attn_varlen_qkvpacked_func is not None
         self.enable_qknorm = enable_qknorm
         if enable_qknorm:
             self.qknorm = QueryKeyNorm(channels, num_heads)
         else:
             print("WARNING: enable_qknorm is False in PTv3Object and training may be fragile")
-        if enable_flash:
+        if enable_flash and not self.enable_flash:
+            print(
+                "WARNING: flash attention kernel not found, fallback to non-flash attention in PTv3Object."
+            )
+        if self.enable_flash:
             assert (
                 enable_rpe is False
             ), "Set enable_rpe to False when enable Flash Attention"
@@ -102,7 +112,6 @@ class SerializedAttention(PointModule):
             assert (
                 upcast_softmax is False
             ), "Set upcast_softmax to False when enable Flash Attention"
-            assert flash_attn is not None, "Make sure flash_attn is installed."
             self.patch_size = patch_size
             self.attn_drop = attn_drop
         else:
@@ -225,7 +234,7 @@ class SerializedAttention(PointModule):
             attn = self.attn_drop(attn).to(qkv.dtype)
             feat = (attn @ v).transpose(1, 2).reshape(-1, C)
         else:
-            feat = flash_attn.flash_attn_varlen_qkvpacked_func(
+            feat = flash_attn_varlen_qkvpacked_func(
                 qkv.half().reshape(-1, 3, H, C // H),
                 cu_seqlens,
                 max_seqlen=self.patch_size,
