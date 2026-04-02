@@ -65,10 +65,10 @@ def scan_all():
         p = Path(d)
         if not p.is_dir():
             continue
-        for f in sorted(p.iterdir()):
+        for f in sorted(p.rglob("*")):
             if f.is_file() and f.suffix.lower() in SUPPORTED_EXT:
                 results.append({
-                    "name": f.name,
+                    "name": str(f.relative_to(p)),
                     "ext": f.suffix.lower().lstrip("."),
                     "size": f.stat().st_size,
                     "path": str(f),
