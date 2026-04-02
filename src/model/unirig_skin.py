@@ -110,6 +110,27 @@ class FrequencyPositionalEmbedding(nn.Module):
         else:
             return x
 
+class CrossAttention(nn.Module):
+    def __init__(self, embed_dim: int, num_heads: int):
+        super().__init__()
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+        self.Wq = nn.Linear(embed_dim, embed_dim)
+        self.Wkv = nn.Linear(embed_dim, 2 * embed_dim)
+        self.out_proj = nn.Linear(embed_dim, embed_dim)
+
+    def forward(self, q, kv):
+        B, N, _ = q.shape
+        S = kv.shape[1]
+        q_proj = self.Wq(q).view(B, N, self.num_heads, self.head_dim).transpose(1, 2)
+        kv_proj = self.Wkv(kv).view(B, S, 2, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        k, v = kv_proj[0], kv_proj[1]
+        attn = (q_proj @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+        attn = F.softmax(attn, dim=-1)
+        out = (attn @ v).transpose(1, 2).reshape(B, N, self.embed_dim)
+        return self.out_proj(out)
+
 class ResidualCrossAttn(nn.Module):
     def __init__(self, feat_dim: int, num_heads: int):
         super().__init__()
@@ -121,23 +142,19 @@ class ResidualCrossAttn(nn.Module):
         if self.use_flash_mha:
             self.attention = FlashMHA(embed_dim=feat_dim, num_heads=num_heads, cross_attn=True)
         else:
-            self.attention = nn.MultiheadAttention(
-                embed_dim=feat_dim,
-                num_heads=num_heads,
-                batch_first=True,
-            )
+            self.attention = CrossAttention(feat_dim, num_heads)
         self.ffn = nn.Sequential(
             nn.Linear(feat_dim, feat_dim * 4),
             nn.GELU(),
             nn.Linear(feat_dim * 4, feat_dim),
         )
-        
+
     def forward(self, q, kv):
         residual = q
         if self.use_flash_mha:
             attn_output = self.attention(q, x_kv=kv)
         else:
-            attn_output, _ = self.attention(q, kv, kv, need_weights=False)
+            attn_output = self.attention(q, kv)
         x = self.norm1(residual + attn_output)
         x = self.norm2(x + self.ffn(x))
         return x
