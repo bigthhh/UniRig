@@ -18,8 +18,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .topbar .btn-add:hover { background: #c73850; }
 .topbar .btn-reload { background: #0f3460; }
 .topbar .btn-reload:hover { background: #1a4a8a; }
-.dir-tags { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; min-height: 0; }
-.dir-tag { display: flex; align-items: center; gap: 4px; background: #1a1a2e; border: 1px solid #0f3460; border-radius: 4px; padding: 3px 8px; font-size: 12px; max-width: 400px; }
+.dir-tags { display: flex; flex-direction: column; gap: 4px; width: 100%; max-height: 120px; overflow-y: auto; }
+.dir-tag { display: flex; align-items: center; gap: 4px; background: #1a1a2e; border: 1px solid #0f3460; border-radius: 4px; padding: 3px 8px; font-size: 12px; flex-shrink: 0; }
 .dir-tag .dir-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #aaa; }
 .dir-tag .dir-remove { cursor: pointer; color: #e94560; font-weight: bold; font-size: 14px; line-height: 1; padding: 0 2px; }
 .dir-tag .dir-remove:hover { color: #ff6b81; }
@@ -41,7 +41,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .file-item .size { font-size: 11px; color: #666; }
 .file-item .dl-btn { font-size: 11px; color: #888; cursor: pointer; padding: 2px 4px; border-radius: 3px; flex-shrink: 0; text-decoration: none; }
 .file-item .dl-btn:hover { color: #e94560; background: rgba(233,69,96,0.1); }
-.dir-group { padding: 6px 12px 4px; font-size: 11px; color: #e94560; background: #111a30; border-bottom: 1px solid #0f3460; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: sticky; top: 0; z-index: 1; }
+.dir-group { padding: 6px 12px 4px; font-size: 11px; color: #e94560; background: #111a30; border-bottom: 1px solid #0f3460; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: sticky; top: 0; z-index: 1; cursor: pointer; display: flex; align-items: center; gap: 4px; user-select: none; }
+.dir-group:hover { background: #162040; }
+.dir-group .dir-toggle { flex-shrink: 0; font-size: 9px; transition: transform 0.15s; }
+.dir-group.collapsed .dir-toggle { transform: rotate(-90deg); }
+.dir-group .dir-label { overflow: hidden; text-overflow: ellipsis; }
+.dir-group .dir-file-count { color: #666; font-size: 10px; margin-left: auto; flex-shrink: 0; }
 
 /* Center - 3D viewport */
 .viewport { flex: 1; position: relative; background: #111; }
@@ -346,25 +351,41 @@ function formatSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+const collapsedDirs = new Set();
+
 function renderFileList() {
   fileList.innerHTML = '';
-  let lastDir = null;
+  const grouped = {};
+  const dirOrder = [];
   files.forEach((f, i) => {
-    if (f.dir !== lastDir) {
-      lastDir = f.dir;
-      const header = document.createElement('div');
-      header.className = 'dir-group';
-      header.textContent = f.dir;
-      header.title = f.dir;
-      fileList.appendChild(header);
-    }
-    const div = document.createElement('div');
-    div.className = 'file-item';
-    div.dataset.index = i;
-    div.innerHTML = `<span class="ext ${f.ext}">${f.ext}</span><span class="name" title="${f.name}">${f.name}</span><span class="size">${formatSize(f.size)}</span><a class="dl-btn" title="Download" href="/api/download?path=${encodeURIComponent(f.path)}">&#x21E9;</a>`;
-    div.querySelector('.dl-btn').addEventListener('click', e => e.stopPropagation());
-    div.addEventListener('click', () => loadFile(i));
-    fileList.appendChild(div);
+    if (!grouped[f.dir]) { grouped[f.dir] = []; dirOrder.push(f.dir); }
+    grouped[f.dir].push({ file: f, index: i });
+  });
+  dirOrder.forEach(dir => {
+    const items = grouped[dir];
+    const isCollapsed = collapsedDirs.has(dir);
+    const header = document.createElement('div');
+    header.className = 'dir-group' + (isCollapsed ? ' collapsed' : '');
+    header.title = dir;
+    header.innerHTML = `<span class="dir-toggle">\u25BC</span><span class="dir-label">${dir}</span><span class="dir-file-count">${items.length}</span>`;
+    const container = document.createElement('div');
+    container.style.display = isCollapsed ? 'none' : '';
+    header.addEventListener('click', () => {
+      if (collapsedDirs.has(dir)) { collapsedDirs.delete(dir); } else { collapsedDirs.add(dir); }
+      header.classList.toggle('collapsed');
+      container.style.display = container.style.display === 'none' ? '' : 'none';
+    });
+    fileList.appendChild(header);
+    items.forEach(({ file: f, index: i }) => {
+      const div = document.createElement('div');
+      div.className = 'file-item';
+      div.dataset.index = i;
+      div.innerHTML = `<span class="ext ${f.ext}">${f.ext}</span><span class="name" title="${f.name}">${f.name}</span><span class="size">${formatSize(f.size)}</span><a class="dl-btn" title="Download" href="/api/download?path=${encodeURIComponent(f.path)}">&#x21E9;</a>`;
+      div.querySelector('.dl-btn').addEventListener('click', e => e.stopPropagation());
+      div.addEventListener('click', () => loadFile(i));
+      container.appendChild(div);
+    });
+    fileList.appendChild(container);
   });
 }
 
