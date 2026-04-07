@@ -39,6 +39,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .file-item .ext.fbx { background: #7b2cbf; color: #e0aaff; }
 .file-item .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .file-item .size { font-size: 11px; color: #666; }
+.file-item .dl-btn { font-size: 11px; color: #888; cursor: pointer; padding: 2px 4px; border-radius: 3px; flex-shrink: 0; text-decoration: none; }
+.file-item .dl-btn:hover { color: #e94560; background: rgba(233,69,96,0.1); }
 .dir-group { padding: 6px 12px 4px; font-size: 11px; color: #e94560; background: #111a30; border-bottom: 1px solid #0f3460; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: sticky; top: 0; z-index: 1; }
 
 /* Center - 3D viewport */
@@ -89,6 +91,18 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .anim-controls select { background: #1a1a2e; border: 1px solid #0f3460; color: #e0e0e0; font-size: 11px; border-radius: 3px; padding: 2px 4px; }
 .anim-controls label { font-size: 11px; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 .anim-controls input[type="checkbox"] { accent-color: #e94560; }
+
+/* Upload bar */
+.upload-bar { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: #111a30; border-top: 1px solid #0f3460; flex-shrink: 0; }
+.upload-bar input[type="text"] { flex: 1; padding: 5px 8px; background: #1a1a2e; border: 1px solid #0f3460; border-radius: 4px; color: #e0e0e0; font-size: 12px; min-width: 0; }
+.upload-bar input[type="text"]:focus { outline: none; border-color: #e94560; }
+.upload-bar button { padding: 4px 10px; border: none; border-radius: 4px; color: #fff; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.upload-bar .btn-set-dir { background: #0f3460; }
+.upload-bar .btn-set-dir:hover { background: #1a4a8a; }
+.upload-bar .btn-upload { background: #2d6a4f; }
+.upload-bar .btn-upload:hover { background: #3a8a65; }
+.upload-bar .upload-dir-display { font-size: 11px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+.upload-bar input[type="file"] { display: none; }
 </style>
 </head>
 <body>
@@ -104,6 +118,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   <div class="panel-left">
     <h3>Files</h3>
     <div class="file-list" id="fileList"></div>
+    <div class="upload-bar">
+      <input type="text" id="uploadDirInput" placeholder="Upload directory path" />
+      <button class="btn-set-dir" id="setUploadDirBtn">Set</button>
+    </div>
+    <div class="upload-bar">
+      <span class="upload-dir-display" id="uploadDirDisplay">No upload dir</span>
+      <button class="btn-upload" id="uploadBtn">Upload</button>
+      <input type="file" id="uploadFileInput" accept=".glb,.fbx" />
+    </div>
   </div>
   <div class="viewport" id="viewport">
     <div class="hint" id="hint">Select a file to preview</div>
@@ -338,7 +361,8 @@ function renderFileList() {
     const div = document.createElement('div');
     div.className = 'file-item';
     div.dataset.index = i;
-    div.innerHTML = `<span class="ext ${f.ext}">${f.ext}</span><span class="name" title="${f.name}">${f.name}</span><span class="size">${formatSize(f.size)}</span>`;
+    div.innerHTML = `<span class="ext ${f.ext}">${f.ext}</span><span class="name" title="${f.name}">${f.name}</span><span class="size">${formatSize(f.size)}</span><a class="dl-btn" title="Download" href="/api/download?path=${encodeURIComponent(f.path)}">&#x21E9;</a>`;
+    div.querySelector('.dl-btn').addEventListener('click', e => e.stopPropagation());
     div.addEventListener('click', () => loadFile(i));
     fileList.appendChild(div);
   });
@@ -669,7 +693,56 @@ animLoopCb.addEventListener('change', () => {
   if (currentAction) currentAction.setLoop(animLoopCb.checked ? THREE.LoopRepeat : THREE.LoopOnce);
 });
 
+// Upload management
+const uploadDirInput = document.getElementById('uploadDirInput');
+const setUploadDirBtn = document.getElementById('setUploadDirBtn');
+const uploadDirDisplay = document.getElementById('uploadDirDisplay');
+const uploadBtn = document.getElementById('uploadBtn');
+const uploadFileInput = document.getElementById('uploadFileInput');
+
+async function fetchUploadDir() {
+  const res = await fetch('/api/upload-dir');
+  const data = await res.json();
+  const dir = data.upload_dir || '';
+  uploadDirDisplay.textContent = dir || 'No upload dir';
+  uploadDirDisplay.title = dir;
+  uploadDirInput.value = dir;
+}
+
+setUploadDirBtn.addEventListener('click', async () => {
+  const dir = uploadDirInput.value.trim();
+  if (!dir) return;
+  const res = await fetch('/api/upload-dir', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dir })
+  });
+  const data = await res.json();
+  if (data.error) { alert(data.error); return; }
+  uploadDirDisplay.textContent = data.upload_dir;
+  uploadDirDisplay.title = data.upload_dir;
+});
+
+uploadBtn.addEventListener('click', () => {
+  if (uploadDirDisplay.textContent === 'No upload dir') { alert('Please set upload directory first'); return; }
+  uploadFileInput.click();
+});
+
+uploadFileInput.addEventListener('change', async () => {
+  const file = uploadFileInput.files[0];
+  if (!file) return;
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const res = await fetch('/api/upload', { method: 'POST', body: form });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    await reload();
+  } catch (e) { alert('Upload failed: ' + e.message); }
+  uploadFileInput.value = '';
+});
+
 // Initial load
+fetchUploadDir();
 fetchDirs().then(reload);
 </script>
 </body>
