@@ -37,6 +37,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .file-item .ext { font-size: 10px; padding: 1px 5px; border-radius: 3px; font-weight: 600; text-transform: uppercase; }
 .file-item .ext.glb { background: #2d6a4f; color: #b7e4c7; }
 .file-item .ext.fbx { background: #7b2cbf; color: #e0aaff; }
+.file-item .ext.obj { background: #b45309; color: #fde68a; }
 .file-item .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .file-item .size { font-size: 11px; color: #666; }
 .file-item .dl-btn { font-size: 11px; color: #888; cursor: pointer; padding: 2px 4px; border-radius: 3px; flex-shrink: 0; text-decoration: none; }
@@ -130,7 +131,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
     <div class="upload-bar">
       <span class="upload-dir-display" id="uploadDirDisplay">No upload dir</span>
       <button class="btn-upload" id="uploadBtn">Upload</button>
-      <input type="file" id="uploadFileInput" accept=".glb,.fbx" />
+      <input type="file" id="uploadFileInput" accept=".glb,.fbx,.obj" />
     </div>
   </div>
   <div class="viewport" id="viewport">
@@ -180,6 +181,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 
 const viewport = document.getElementById('viewport');
 const fileList = document.getElementById('fileList');
@@ -411,6 +414,10 @@ async function loadFile(index) {
       const loader = new FBXLoader();
       const fbx = await loader.loadAsync(url);
       addModel(fbx, fbx.animations);
+    } else if (f.ext === 'obj') {
+      const loader = new OBJLoader();
+      const obj = await loader.loadAsync(url);
+      addModel(obj, []);
     }
   } catch (e) {
     alert('Failed to load: ' + e.message);

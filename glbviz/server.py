@@ -10,7 +10,7 @@ from flask import Flask, jsonify, request, send_from_directory, send_file
 
 app = Flask(__name__, static_folder="static")
 
-SUPPORTED_EXT = {".glb", ".fbx"}
+SUPPORTED_EXT = {".glb", ".fbx", ".obj"}
 CONFIG_FILE = Path(__file__).parent / "dirs.json"
 UPLOAD_DIR_FILE = Path(__file__).parent / "upload_dir.json"
 
