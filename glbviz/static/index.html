@@ -491,11 +491,7 @@ async function loadFile(index) {
     } else if (f.ext === 'bvh') {
       const loader = new BVHLoader();
       const result = await loader.loadAsync(url);
-      const group = new THREE.Group();
-      const boneContainer = new THREE.Object3D();
-      boneContainer.add(result.skeleton.bones[0]);
-      group.add(boneContainer);
-      addModel(group, result.clip ? [result.clip] : []);
+      loadBVH(result);
     }
   } catch (e) {
     alert('Failed to load: ' + e.message);
@@ -518,6 +514,98 @@ function clearScene() {
   selectedBoneObj = null;
   mediaPreview.classList.remove('show');
   mediaPreview.innerHTML = '';
+  showMeshCb.closest('label').style.display = '';
+  showWireframeCb.closest('label').style.display = '';
+}
+
+function loadBVH(result) {
+  const root = result.skeleton.bones[0];
+  scene.add(root);
+  currentModel = root;
+
+  // Compute bone bounding box manually
+  const positions = [];
+  root.traverse(b => { if (b.isBone) positions.push(b.position); });
+  root.updateWorldMatrix(true, true);
+  const box = new THREE.Box3();
+  root.traverse(b => {
+    if (b.isBone) {
+      const wp = new THREE.Vector3();
+      b.getWorldPosition(wp);
+      box.expandByPoint(wp);
+    }
+  });
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const scale = maxDim > 0 ? 2.0 / maxDim : 1;
+  root.scale.multiplyScalar(scale);
+  root.updateWorldMatrix(true, true);
+  // Recompute after scale
+  const box2 = new THREE.Box3();
+  root.traverse(b => {
+    if (b.isBone) {
+      const wp = new THREE.Vector3();
+      b.getWorldPosition(wp);
+      box2.expandByPoint(wp);
+    }
+  });
+  const center2 = box2.getCenter(new THREE.Vector3());
+  root.position.sub(center2);
+  root.position.y -= box2.min.y;
+
+  // Skeleton helper
+  skeletonHelper = new THREE.SkeletonHelper(root);
+  skeletonHelper.material = new THREE.LineBasicMaterial({
+    vertexColors: true, linewidth: 2, depthTest: false, depthWrite: false,
+  });
+  const count = skeletonHelper.geometry.getAttribute('position').count;
+  const colors = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) { colors[i*3] = 0.3; colors[i*3+1] = 0.5; colors[i*3+2] = 0.8; }
+  skeletonHelper.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  scene.add(skeletonHelper);
+  buildBoneTree(root);
+  const boneList = [];
+  root.traverse(b => { if (b.isBone) boneList.push(b); });
+  boneCount.textContent = `${boneList.length} bones`;
+
+  // Bone marker
+  boneMarker = new THREE.Mesh(
+    new THREE.SphereGeometry(0.025, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0xe94560, depthTest: false, transparent: true, opacity: 0.9 })
+  );
+  boneMarker.renderOrder = 999;
+  boneMarker.visible = false;
+  scene.add(boneMarker);
+
+  // Camera
+  const dist = parseFloat(camDistSlider.value);
+  controls.target.set(0, size.y * scale * 0.4, 0);
+  camera.position.set(dist * 0.5, dist * 0.4, dist * 0.85);
+  controls.update();
+
+  viewControls.style.display = 'flex';
+  showMeshCb.closest('label').style.display = 'none';
+  showWireframeCb.closest('label').style.display = 'none';
+
+  // Animation
+  if (result.clip) {
+    clips = [result.clip];
+    mixer = new THREE.AnimationMixer(root);
+    mixer.addEventListener('finished', () => { isPlaying = false; animPlayBtn.textContent = '▶'; });
+    animList.innerHTML = '';
+    const el = document.createElement('div');
+    el.className = 'anim-item';
+    el.textContent = result.clip.name || 'BVH Clip';
+    el.title = result.clip.duration.toFixed(2) + 's';
+    el.addEventListener('click', () => playClip(0));
+    animList.appendChild(el);
+    animBar.style.display = '';
+    animTimeline.value = 0;
+    animTimeEl.textContent = '0:00.0';
+    animDurationEl.textContent = fmtTime(result.clip.duration);
+    playClip(0);
+  }
 }
 
 function addModel(object, animClips) {
