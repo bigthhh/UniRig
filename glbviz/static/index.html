@@ -31,6 +31,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 /* Left panel - file list */
 .panel-left { width: 240px; min-width: 160px; max-width: 50vw; background: #16213e; display: flex; flex-direction: column; flex-shrink: 0; }
 .panel-left h3 { padding: 10px 12px 6px; font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+/* Extension filter */
+.ext-filter { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 8px; border-bottom: 1px solid #0f3460; flex-shrink: 0; }
+.ext-filter:empty { display: none; }
+.ext-filter label { font-size: 11px; display: flex; align-items: center; gap: 3px; cursor: pointer; padding: 2px 6px; border-radius: 3px; background: #1a1a2e; border: 1px solid #0f3460; user-select: none; }
+.ext-filter label:hover { border-color: #e94560; }
+.ext-filter input[type="checkbox"] { accent-color: #e94560; width: 12px; height: 12px; }
+
 .file-list { flex: 1; overflow-y: auto; }
 .file-item { padding: 8px 12px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #0f3460; display: flex; align-items: center; gap: 8px; }
 .file-item:hover { background: #1a1a3e; }
@@ -135,6 +142,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
       </div>
       <div class="dir-tags" id="dirTags"></div>
     </div>
+    <div class="ext-filter" id="extFilter"></div>
     <div class="file-list" id="fileList"></div>
     <div class="upload-bar">
       <input type="text" id="uploadDirInput" placeholder="Upload directory path" />
@@ -356,6 +364,7 @@ async function reload() {
     const res = await fetch('/api/scan');
     const data = await res.json();
     files = data.files || [];
+    renderExtFilter();
     renderFileList();
   } catch (e) { alert('Reload failed: ' + e.message); }
 }
@@ -371,12 +380,34 @@ function formatSize(bytes) {
 }
 
 const collapsedDirs = new Set();
+const enabledExts = new Set();
+const extFilter = document.getElementById('extFilter');
+
+function renderExtFilter() {
+  const allExts = [...new Set(files.map(f => f.ext))].sort();
+  extFilter.innerHTML = '';
+  if (enabledExts.size === 0) allExts.forEach(e => enabledExts.add(e));
+  allExts.forEach(ext => {
+    const label = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = enabledExts.has(ext);
+    cb.addEventListener('change', () => {
+      if (cb.checked) enabledExts.add(ext); else enabledExts.delete(ext);
+      renderFileList();
+    });
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(ext));
+    extFilter.appendChild(label);
+  });
+}
 
 function renderFileList() {
   fileList.innerHTML = '';
   const grouped = {};
   const dirOrder = [];
   files.forEach((f, i) => {
+    if (!enabledExts.has(f.ext)) return;
     if (!grouped[f.dir]) { grouped[f.dir] = []; dirOrder.push(f.dir); }
     grouped[f.dir].push({ file: f, index: i });
   });
