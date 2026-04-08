@@ -10,7 +10,9 @@ from flask import Flask, jsonify, request, send_from_directory, send_file
 
 app = Flask(__name__, static_folder="static")
 
-SUPPORTED_EXT = {".glb", ".fbx", ".obj"}
+MODEL_EXT = {".glb", ".fbx", ".obj"}
+MEDIA_EXT = {".mp4", ".png", ".jpg", ".jpeg"}
+SUPPORTED_EXT = MODEL_EXT | MEDIA_EXT
 CONFIG_FILE = Path(__file__).parent / "dirs.json"
 UPLOAD_DIR_FILE = Path(__file__).parent / "upload_dir.json"
 
@@ -99,7 +101,9 @@ def serve_file():
         return jsonify({"error": f"File not found: {p}"}), 404
     if p.suffix.lower() not in SUPPORTED_EXT:
         return jsonify({"error": "Unsupported file type"}), 400
-    return send_file(p, mimetype="application/octet-stream")
+    mime_map = {".mp4": "video/mp4", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
+    mimetype = mime_map.get(p.suffix.lower(), "application/octet-stream")
+    return send_file(p, mimetype=mimetype)
 
 
 @app.route("/api/download")
