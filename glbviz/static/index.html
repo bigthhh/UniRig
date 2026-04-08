@@ -46,6 +46,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .file-item .ext.glb { background: #2d6a4f; color: #b7e4c7; }
 .file-item .ext.fbx { background: #7b2cbf; color: #e0aaff; }
 .file-item .ext.obj { background: #b45309; color: #fde68a; }
+.file-item .ext.bvh { background: #047857; color: #a7f3d0; }
 .file-item .ext.mp4 { background: #dc2626; color: #fecaca; }
 .file-item .ext.png, .file-item .ext.jpg, .file-item .ext.jpeg { background: #0369a1; color: #bae6fd; }
 .file-item .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
@@ -151,7 +152,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
     <div class="upload-bar">
       <span class="upload-dir-display" id="uploadDirDisplay">No upload dir</span>
       <button class="btn-upload" id="uploadBtn">Upload</button>
-      <input type="file" id="uploadFileInput" accept=".glb,.fbx,.obj,.mp4,.png,.jpg,.jpeg" />
+      <input type="file" id="uploadFileInput" accept=".glb,.fbx,.obj,.bvh,.mp4,.png,.jpg,.jpeg" />
     </div>
   </div>
   <div class="resize-handle" id="resizeLeft"></div>
@@ -206,6 +207,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { BVHLoader } from 'three/addons/loaders/BVHLoader.js';
 
 const viewport = document.getElementById('viewport');
 const mediaPreview = document.getElementById('mediaPreview');
@@ -486,6 +488,14 @@ async function loadFile(index) {
       const loader = new OBJLoader();
       const obj = await loader.loadAsync(url);
       addModel(obj, []);
+    } else if (f.ext === 'bvh') {
+      const loader = new BVHLoader();
+      const result = await loader.loadAsync(url);
+      const group = new THREE.Group();
+      const boneContainer = new THREE.Object3D();
+      boneContainer.add(result.skeleton.bones[0]);
+      group.add(boneContainer);
+      addModel(group, result.clip ? [result.clip] : []);
     }
   } catch (e) {
     alert('Failed to load: ' + e.message);
