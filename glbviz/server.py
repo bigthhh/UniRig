@@ -155,6 +155,23 @@ def upload_file():
     return jsonify({"ok": True, "path": str(dest), "name": filename})
 
 
+@app.route("/api/delete", methods=["POST"])
+def delete_file():
+    file_path = request.json.get("path", "")
+    if not file_path:
+        return jsonify({"error": "Missing 'path' parameter"}), 400
+    p = Path(file_path).expanduser().resolve()
+    if not p.is_file():
+        return jsonify({"error": f"File not found: {p}"}), 404
+    if p.suffix.lower() not in SUPPORTED_EXT:
+        return jsonify({"error": "Unsupported file type"}), 400
+    dirs = load_dirs()
+    if not any(str(p).startswith(d) for d in dirs):
+        return jsonify({"error": "File not in managed directories"}), 403
+    p.unlink()
+    return jsonify({"ok": True})
+
+
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
     print(f"Starting GLB/FBX viewer at http://localhost:{port}")

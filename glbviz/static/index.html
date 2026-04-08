@@ -51,8 +51,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .file-item .ext.png, .file-item .ext.jpg, .file-item .ext.jpeg { background: #0369a1; color: #bae6fd; }
 .file-item .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .file-item .size { font-size: 11px; color: #666; }
-.file-item .dl-btn { font-size: 11px; color: #888; cursor: pointer; padding: 2px 4px; border-radius: 3px; flex-shrink: 0; text-decoration: none; }
+.file-item .dl-btn, .file-item .del-btn { font-size: 11px; color: #888; cursor: pointer; padding: 2px 4px; border-radius: 3px; flex-shrink: 0; text-decoration: none; border: none; background: none; }
 .file-item .dl-btn:hover { color: #e94560; background: rgba(233,69,96,0.1); }
+.file-item .del-btn:hover { color: #ff4444; background: rgba(255,68,68,0.15); }
 .dir-group { padding: 6px 12px 4px; font-size: 11px; color: #e94560; background: #111a30; border-bottom: 1px solid #0f3460; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: sticky; top: 0; z-index: 1; cursor: pointer; display: flex; align-items: center; gap: 4px; user-select: none; }
 .dir-group:hover { background: #162040; }
 .dir-group .dir-toggle { flex-shrink: 0; font-size: 9px; transition: transform 0.15s; }
@@ -381,6 +382,19 @@ function formatSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+async function deleteFile(path) {
+  if (!confirm('Delete this file?')) return;
+  try {
+    const res = await fetch('/api/delete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path })
+    });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    await reload();
+  } catch (e) { alert('Delete failed: ' + e.message); }
+}
+
 const collapsedDirs = new Set();
 const enabledExts = new Set();
 const extFilter = document.getElementById('extFilter');
@@ -432,8 +446,9 @@ function renderFileList() {
       const div = document.createElement('div');
       div.className = 'file-item';
       div.dataset.index = i;
-      div.innerHTML = `<span class="ext ${f.ext}">${f.ext}</span><span class="name" title="${f.name}">${f.name}</span><span class="size">${formatSize(f.size)}</span><a class="dl-btn" title="Download" href="/api/download?path=${encodeURIComponent(f.path)}">&#x21E9;</a>`;
+      div.innerHTML = `<span class="ext ${f.ext}">${f.ext}</span><span class="name" title="${f.name}">${f.name}</span><span class="size">${formatSize(f.size)}</span><a class="dl-btn" title="Download" href="/api/download?path=${encodeURIComponent(f.path)}">&#x21E9;</a><button class="del-btn" title="Delete">&#x2715;</button>`;
       div.querySelector('.dl-btn').addEventListener('click', e => e.stopPropagation());
+      div.querySelector('.del-btn').addEventListener('click', e => { e.stopPropagation(); deleteFile(f.path); });
       div.addEventListener('click', () => loadFile(i));
       container.appendChild(div);
     });
