@@ -272,6 +272,30 @@ scene.add(dirLight2);
 const grid = new THREE.GridHelper(10, 20, 0x333333, 0x222222);
 scene.add(grid);
 
+// Axes
+const axes = new THREE.AxesHelper(1.5);
+axes.setColors(new THREE.Color(0xff4444), new THREE.Color(0x44ff44), new THREE.Color(0x4488ff));
+scene.add(axes);
+function makeAxisLabel(text, color, pos) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64; canvas.height = 32;
+  const ctx = canvas.getContext('2d');
+  ctx.font = 'bold 24px sans-serif';
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.fillText(text, 32, 24);
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+  const sprite = new THREE.Sprite(mat);
+  sprite.position.copy(pos);
+  sprite.scale.set(0.5, 0.25, 1);
+  sprite.renderOrder = 998;
+  return sprite;
+}
+scene.add(makeAxisLabel('X', '#ff4444', new THREE.Vector3(1.7, 0, 0)));
+scene.add(makeAxisLabel('Y', '#44ff44', new THREE.Vector3(0, 1.7, 0)));
+scene.add(makeAxisLabel('Z', '#4488ff', new THREE.Vector3(0, 0, 1.7)));
+
 // State
 let currentModel = null;
 let skeletonHelper = null;
