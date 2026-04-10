@@ -89,6 +89,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .view-controls .range-label { gap: 6px; }
 .view-controls input[type="range"] { width: 80px; accent-color: #e94560; vertical-align: middle; }
 .view-controls #camDistVal { font-size: 11px; min-width: 20px; display: inline-block; }
+.view-controls input[type="color"] { width: 24px; height: 20px; border: 1px solid #0f3460; border-radius: 3px; padding: 0; cursor: pointer; background: none; }
 
 /* Right panel - bone tree */
 .panel-right { width: 280px; min-width: 160px; max-width: 50vw; background: #16213e; display: flex; flex-direction: column; flex-shrink: 0; }
@@ -172,6 +173,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
       <label><input type="checkbox" id="showSkeleton" checked> Skeleton</label>
       <label><input type="checkbox" id="showWireframe"> Wireframe</label>
       <label class="range-label">Dist <input type="range" id="camDist" min="1" max="20" step="0.5" value="6"> <span id="camDistVal">6</span></label>
+      <label>BG <input type="color" id="bgColor" value="#111111"></label>
     </div>
     <div class="anim-bar" id="animBar" style="display:none;">
       <div class="anim-list" id="animList"></div>
@@ -750,6 +752,13 @@ camDistSlider.addEventListener('input', () => {
   const dir = camera.position.clone().sub(controls.target).normalize();
   camera.position.copy(controls.target).addScaledVector(dir, dist);
   controls.update();
+});
+
+const bgColorInput = document.getElementById('bgColor');
+bgColorInput.addEventListener('input', () => {
+  const c = bgColorInput.value;
+  scene.background = new THREE.Color(c);
+  viewport.style.background = c;
 });
 
 // Build bone tree UI
